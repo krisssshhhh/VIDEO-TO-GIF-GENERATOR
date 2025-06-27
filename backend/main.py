@@ -4,13 +4,19 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-import uuid, shutil
-import subprocess
+import uuid, shutil, subprocess
 import whisper, yt_dlp
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-model = whisper.load_model("base")
+
+# Lazy load Whisper model
+model = None
+
+@app.on_event("startup")
+def load_model():
+    global model
+    model = whisper.load_model("tiny")  # Use 'tiny' to stay within 512MB RAM
 
 def make_gif_ffmpeg(src: str, dst: str, start: float, end: float):
     palette = dst.replace(".gif", "_palette.png")
@@ -18,13 +24,13 @@ def make_gif_ffmpeg(src: str, dst: str, start: float, end: float):
     # Generate palette
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
-        "-i", src, "-vf", f"fps=10,scale=600:-1:flags=lanczos,palettegen", palette
+        "-i", src, "-vf", "fps=10,scale=360:-1:flags=lanczos,palettegen", palette
     ], check=True)
     # Create GIF
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
         "-i", src, "-i", palette,
-        "-lavfi", "fps=10,scale=600:-1:flags=lanczos[x];[x][1:v]paletteuse",
+        "-lavfi", "fps=10,scale=360:-1:flags=lanczos[x];[x][1:v]paletteuse",
         dst
     ], check=True)
     os.remove(palette)
@@ -42,24 +48,26 @@ async def generate(prompt: str = Form(...), file: UploadFile = None, youtube_url
         with open(video_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
     else:
-        opts = {"format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]", "merge_output_format":"mp4", "outtmpl":video_path}
+        opts = {
+            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
+            "merge_output_format": "mp4",
+            "outtmpl": video_path
+        }
         yt_dlp.YoutubeDL(opts).download([youtube_url])
 
     try:
-        res = model.transcribe(video_path, fp16=False)
-        segs = res.get("segments", [])[:3]
+        res = model.transcribe(video_path, fp16=False, language='en')
+        segs = res.get("segments", [])[:2]  # Limit to first 2 segments for speed
         if not segs:
             raise HTTPException(400, "No speech detected.")
 
         gifs = []
         for i, s in enumerate(segs):
             dst = os.path.join("output", f"gif_{i}.gif")
-            print(f"[DEBUG] Generating GIF {i}: {s}")
             try:
                 make_gif_ffmpeg(video_path, dst, s["start"], s["end"])
                 gifs.append(dst)
             except subprocess.CalledProcessError as e:
-                print(f"[ERROR] FFmpeg failed: {e}")
                 raise HTTPException(500, f"GIF conversion error: {e}")
 
         return {"gifs": gifs}
