@@ -1,0 +1,184 @@
+:root {
+  --brand-primary: #0053ba;
+  --brand-secondary: #e0e7ff;
+  --brand-accent: #ff7f50;
+  --text-color: #333333;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--brand-secondary);
+  color: var(--text-color);
+}
+
+.container {
+  max-width: 700px;
+  margin: 50px auto;
+  background: #fff;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 2rem;
+  color: var(--brand-primary);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+input[type="text"],
+input[type="file"] {
+  padding: 12px;
+  font-size: 1rem;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  transition: border-color 0.3s;
+}
+input[type="text"]:focus,
+input[type="file"]:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+}
+
+.or-divider {
+  text-align: center;
+  margin: 5px 0 15px;
+  position: relative;
+  font-size: 0.9rem;
+  color: #666;
+}
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 1px;
+  background: #ddd;
+  position: absolute;
+  top: 50%;
+}
+.or-divider::before { left: 0; }
+.or-divider::after { right: 0; }
+
+.gifs-container {
+  display: grid;
+  gap: 24px;
+  margin-top: 40px;
+}
+.gifs-container img {
+  max-width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.gif-card {
+  background: #fdfdfd;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+.gif-card a {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--brand-accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.gif-card a:hover {
+  text-decoration: underline;
+}
+.gif-card button {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: none;
+  background-color: #1d4ed8;
+  color: white;
+  font-weight: bold;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.gif-card button:hover {
+  background-color: #2563eb;
+}
+@media (min-width: 600px) {
+  .gifs-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .gifs-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.footer {
+  margin-top: 50px;
+  padding: 20px;
+  background-color: var(--brand-secondary);
+  text-align: center;
+  border-top: 1px solid #ddd;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.footer a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+button {
+  padding: 14px;
+  font-size: 1rem;
+  background: var(--brand-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s, opacity 0.3s;
+}
+
+/* Fix hover effect so button stays visible */
+button:hover:not(:disabled) {
+  background: #004097; /* Slightly darker primary shade */
+}
+
+button:disabled,
+button.loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Optional: add spinner look for loading state */
+button.loading {
+  position: relative;
+}
+button.loading::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-top: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+@keyframes spin {
+  to { transform: translateY(-50%) rotate(360deg); }
+}
