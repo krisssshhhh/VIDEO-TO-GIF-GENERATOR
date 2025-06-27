@@ -10,27 +10,30 @@ import whisper, yt_dlp
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Lazy load Whisper model
+# ✅ Health check route for Render
+@app.get("/")
+def health():
+    return {"status": "Backend is live"}
+
+# ✅ Load the whisper model lazily and keep it tiny
 model = None
 
 @app.on_event("startup")
 def load_model():
     global model
-    model = whisper.load_model("tiny")  # Use 'tiny' to stay within 512MB RAM
+    model = whisper.load_model("tiny")  # Render free = 512MB max
 
 def make_gif_ffmpeg(src: str, dst: str, start: float, end: float):
     palette = dst.replace(".gif", "_palette.png")
     duration = end - start
-    # Generate palette
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
-        "-i", src, "-vf", "fps=10,scale=360:-1:flags=lanczos,palettegen", palette
+        "-i", src, "-vf", "fps=5,scale=320:-1:flags=lanczos,palettegen", palette
     ], check=True)
-    # Create GIF
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
         "-i", src, "-i", palette,
-        "-lavfi", "fps=10,scale=360:-1:flags=lanczos[x];[x][1:v]paletteuse",
+        "-lavfi", "fps=5,scale=320:-1:flags=lanczos[x];[x][1:v]paletteuse",
         dst
     ], check=True)
     os.remove(palette)
@@ -48,16 +51,21 @@ async def generate(prompt: str = Form(...), file: UploadFile = None, youtube_url
         with open(video_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
     else:
-        opts = {
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
-            "merge_output_format": "mp4",
-            "outtmpl": video_path
-        }
-        yt_dlp.YoutubeDL(opts).download([youtube_url])
+        try:
+            opts = {
+                "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
+                "merge_output_format": "mp4",
+                "outtmpl": video_path,
+            }
+            yt_dlp.YoutubeDL(opts).download([youtube_url])
+        except Exception as e:
+            print(f"[yt-dlp ERROR] {e}")
+            raise HTTPException(400, "YouTube video could not be downloaded. It may require sign-in.")
 
     try:
-        res = model.transcribe(video_path, fp16=False, language='en')
-        segs = res.get("segments", [])[:2]  # Limit to first 2 segments for speed
+        # ✅ Only transcribe the first 15 seconds to save memory
+        res = model.transcribe(video_path, fp16=False, language='en', duration=15)
+        segs = res.get("segments", [])[:1]  # ✅ Limit to only 1 GIF (less memory)
         if not segs:
             raise HTTPException(400, "No speech detected.")
 
@@ -68,13 +76,15 @@ async def generate(prompt: str = Form(...), file: UploadFile = None, youtube_url
                 make_gif_ffmpeg(video_path, dst, s["start"], s["end"])
                 gifs.append(dst)
             except subprocess.CalledProcessError as e:
+                print(f"[ffmpeg ERROR] {e}")
                 raise HTTPException(500, f"GIF conversion error: {e}")
 
         return {"gifs": gifs}
     except HTTPException:
         raise
     except Exception as e:
-        return JSONResponse(500, content={"error": str(e)})
+        print(f"[Unhandled ERROR] {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/output/{fname}")
 def get_gif(fname: str):
