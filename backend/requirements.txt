@@ -4,3 +4,5 @@ moviepy
 openai-whisper
 python-multipart
 yt-dlp
+whisper
+ffmpeg-python
