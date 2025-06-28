@@ -1,7 +1,8 @@
-// frontend/src/App.js
 import React, { useState } from 'react';
 import axios from 'axios';
 import './App.css';
+
+const BASE_URL = "https://video-to-gif-generator.onrender.com";
 
 function App() {
   const [prompt, setPrompt] = useState('');
@@ -24,7 +25,7 @@ function App() {
     if (youtubeUrl) formData.append("youtube_url", youtubeUrl);
 
     try {
-      const res = await axios.post("http://localhost:8000/generate", formData);
+      const res = await axios.post(`${BASE_URL}/generate`, formData);
       setGifs(res.data.gifs);
     } catch (err) {
       alert(err.response?.data?.detail || err.message);
@@ -35,7 +36,7 @@ function App() {
 
   const handleDownload = async (gifPath, idx) => {
     try {
-      const url = `http://localhost:8000/${gifPath}`;
+      const url = `${BASE_URL}/${gifPath}`;
       const response = await axios.get(url, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'image/gif' });
       const localUrl = URL.createObjectURL(blob);
@@ -92,7 +93,7 @@ function App() {
       <div className="gifs-container">
         {gifs.map((gifPath, idx) => (
           <div className="gif-card" key={idx}>
-            <img src={`http://localhost:8000/${gifPath}`} alt={`gif-${idx}`} />
+            <img src={`${BASE_URL}/${gifPath}`} alt={`gif-${idx}`} />
             <button onClick={() => handleDownload(gifPath, idx)}>Download</button>
           </div>
         ))}
