@@ -8,27 +8,32 @@ import uuid, shutil, subprocess
 import whisper, yt_dlp
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
-# ✅ Health check route for Render
 @app.get("/")
 def health():
     return {"status": "Backend is live"}
 
-# ✅ Load the whisper model lazily and keep it tiny
 model = None
 
 @app.on_event("startup")
 def load_model():
     global model
-    model = whisper.load_model("tiny")  # Render free = 512MB max
+    model = whisper.load_model("tiny")  # ~300MB RAM
 
 def make_gif_ffmpeg(src: str, dst: str, start: float, end: float):
     palette = dst.replace(".gif", "_palette.png")
     duration = end - start
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
-        "-i", src, "-vf", "fps=5,scale=320:-1:flags=lanczos,palettegen", palette
+        "-i", src,
+        "-vf", "fps=5,scale=320:-1:flags=lanczos,palettegen",
+        palette
     ], check=True)
     subprocess.run([
         "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
@@ -46,26 +51,30 @@ async def generate(prompt: str = Form(...), file: UploadFile = None, youtube_url
     os.makedirs("videos", exist_ok=True)
     os.makedirs("output", exist_ok=True)
 
-    video_path = os.path.join("videos", f"{uuid.uuid4()}.mp4")
+    raw_path = os.path.join("videos", f"{uuid.uuid4()}.mp4")
     if file:
-        with open(video_path, "wb") as f:
+        with open(raw_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
     else:
         try:
             opts = {
                 "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
                 "merge_output_format": "mp4",
-                "outtmpl": video_path,
+                "outtmpl": raw_path,
             }
             yt_dlp.YoutubeDL(opts).download([youtube_url])
         except Exception as e:
             print(f"[yt-dlp ERROR] {e}")
-            raise HTTPException(400, "YouTube video could not be downloaded. It may require sign-in.")
+            raise HTTPException(400, "YouTube video could not be downloaded. It may require sign-in or is blocked.")
 
     try:
-        # ✅ Only transcribe the first 15 seconds to save memory
-        res = model.transcribe(video_path, fp16=False, language='en', duration=15)
-        segs = res.get("segments", [])[:1]  # ✅ Limit to only 1 GIF (less memory)
+        trimmed = raw_path.replace(".mp4", "_trim.mp4")
+        subprocess.run([
+            "ffmpeg", "-y", "-ss", "0", "-t", "15", "-i", raw_path, trimmed
+        ], check=True)
+
+        res = model.transcribe(trimmed, fp16=False, language="en")
+        segs = res.get("segments", [])[:1]
         if not segs:
             raise HTTPException(400, "No speech detected.")
 
@@ -73,7 +82,7 @@ async def generate(prompt: str = Form(...), file: UploadFile = None, youtube_url
         for i, s in enumerate(segs):
             dst = os.path.join("output", f"gif_{i}.gif")
             try:
-                make_gif_ffmpeg(video_path, dst, s["start"], s["end"])
+                make_gif_ffmpeg(trimmed, dst, s["start"], s["end"])
                 gifs.append(dst)
             except subprocess.CalledProcessError as e:
                 print(f"[ffmpeg ERROR] {e}")
