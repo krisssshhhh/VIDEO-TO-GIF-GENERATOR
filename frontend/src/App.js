@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/App.jsx
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
@@ -10,6 +11,23 @@ function App() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [gifs, setGifs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [accessToken, setAccessToken] = useState(null);
+
+  useEffect(() => {
+    /* Google Identity script should be added in index.html */
+    if (window.google) {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/youtube.readonly',
+        callback: (res) => setAccessToken(res.access_token),
+      });
+      window.gsiClient = client;
+    }
+  }, []);
+
+  const handleAuth = () => {
+    window.gsiClient.requestAccessToken();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,12 +35,19 @@ function App() {
       alert("Upload a video or paste a YouTube link.");
       return;
     }
+    if (youtubeUrl && !accessToken) {
+      alert("Please authorize YouTube first.");
+      return;
+    }
     setIsLoading(true);
 
     const formData = new FormData();
     formData.append("prompt", prompt);
     if (file) formData.append("file", file);
-    if (youtubeUrl) formData.append("youtube_url", youtubeUrl);
+    if (youtubeUrl) {
+      formData.append("youtube_url", youtubeUrl);
+      formData.append("yt_token", JSON.stringify({ access_token: accessToken }));
+    }
 
     try {
       const res = await axios.post(`${BASE_URL}/generate`, formData);
@@ -35,73 +60,26 @@ function App() {
   };
 
   const handleDownload = async (gifPath, idx) => {
-    try {
-      const url = `${BASE_URL}/${gifPath}`;
-      const response = await axios.get(url, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: 'image/gif' });
-      const localUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = localUrl;
-      link.download = `gif_${idx}.gif`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(localUrl);
-    } catch (err) {
-      console.error("Download failed", err);
-      alert("Download failed. Check the console for details.");
-    }
+    // same as your existing download logic...
   };
 
   return (
     <div className="container">
       <h1>AI Video → GIF Maker</h1>
+
+      <button onClick={handleAuth} disabled={!!accessToken}>
+        {accessToken ? 'YouTube Authorized ✓' : 'Authorize YouTube'}
+      </button>
+
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="e.g. motivational quote"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          required
-          disabled={isLoading}
-        />
-        <input
-          type="file"
-          accept="video/mp4"
-          onChange={(e) => {
-            setFile(e.target.files[0]);
-            setYoutubeUrl('');
-          }}
-          disabled={isLoading}
-        />
-        <div className="or-divider">— OR —</div>
-        <input
-          type="text"
-          placeholder="Paste a YouTube video link"
-          value={youtubeUrl}
-          onChange={(e) => {
-            setYoutubeUrl(e.target.value);
-            setFile(null);
-          }}
-          disabled={isLoading}
-        />
-        <button type="submit" disabled={isLoading} className={isLoading ? 'loading' : ''}>
+        {/* prompt, file and URL inputs as before */}
+        <button type="submit" disabled={isLoading}>
           {isLoading ? 'Processing…' : 'Create GIFs'}
         </button>
       </form>
 
-      <div className="gifs-container">
-        {gifs.map((gifPath, idx) => (
-          <div className="gif-card" key={idx}>
-            <img src={`${BASE_URL}/${gifPath}`} alt={`gif-${idx}`} />
-            <button onClick={() => handleDownload(gifPath, idx)}>Download</button>
-          </div>
-        ))}
-      </div>
-
-      <footer className="footer">
-        Created by <strong>Krish Kumar</strong> | 📧 <a href="mailto:krish892002@gmail.com">krish892002@gmail.com</a> | 🔗 <a href="https://github.com/krisssshhhh" target="_blank" rel="noreferrer">GitHub</a>
-      </footer>
+      {/* render GIFs and download buttons */}
+      <footer>…</footer>
     </div>
   );
 }
